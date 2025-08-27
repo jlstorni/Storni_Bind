@@ -1,0 +1,150 @@
+' Módulo VBA para o Add-in do Excel
+' Este código deve ser inserido em um módulo VBA no Excel
+
+Option Explicit
+
+' Declarações para chamar Python
+Private Const PYTHON_PATH As String = "python" ' ou caminho completo para python.exe
+Private Const SCRIPT_PATH As String = "C:\caminho\para\excel_functions.py" ' Ajustar caminho
+
+' Função principal para processar dados do Excel
+Public Function ProcessExcelData(dataRange As Range, Optional outputPath As String = "") As String
+    Dim pythonScript As String
+    Dim dataArray As Variant
+    Dim i As Long, j As Long
+    Dim tempFile As String
+    Dim result As String
+    
+    ' Obter dados do range
+    dataArray = dataRange.Value
+    
+    ' Criar arquivo temporário com os dados
+    tempFile = Environ("TEMP") & "\excel_data_temp.csv"
+    
+    ' Escrever dados para arquivo temporário
+    Dim fso As Object
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    Dim file As Object
+    Set file = fso.CreateTextFile(tempFile, True)
+    
+    ' Escrever dados linha por linha
+    For i = 1 To UBound(dataArray, 1)
+        Dim line As String
+        line = ""
+        For j = 1 To UBound(dataArray, 2)
+            If j > 1 Then line = line & ","
+            line = line & CStr(dataArray(i, j))
+        Next j
+        file.WriteLine line
+    Next i
+    file.Close
+    
+    ' Construir comando Python
+    If outputPath = "" Then
+        outputPath = Environ("USERPROFILE") & "\Desktop\excel_output.txt"
+    End If
+    
+    pythonScript = "import pandas as pd; " & _
+                  "df = pd.read_csv('" & Replace(tempFile, "\", "/") & "'); " & _
+                  "df.to_csv('" & Replace(outputPath, "\", "/") & "', sep='\t', index=False); " & _
+                  "print('Arquivo salvo em: " & outputPath & "')"
+    
+    ' Executar Python
+    result = ExecutePython(pythonScript)
+    
+    ' Limpar arquivo temporário
+    Kill tempFile
+    
+    ProcessExcelData = result
+End Function
+
+' Função para executar código Python
+Private Function ExecutePython(pythonCode As String) As String
+    Dim shell As Object
+    Dim exec As Object
+    Dim tempScript As String
+    Dim result As String
+    
+    Set shell = CreateObject("WScript.Shell")
+    
+    ' Criar arquivo temporário com o script Python
+    tempScript = Environ("TEMP") & "\temp_script.py"
+    
+    Dim fso As Object
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    Dim file As Object
+    Set file = fso.CreateTextFile(tempScript, True)
+    file.Write pythonCode
+    file.Close
+    
+    ' Executar Python
+    Set exec = shell.exec(PYTHON_PATH & " " & tempScript)
+    
+    ' Aguardar conclusão e obter resultado
+    Do While exec.Status = 0
+        DoEvents
+    Loop
+    
+    result = exec.StdOut.ReadAll
+    If result = "" Then
+        result = exec.StdErr.ReadAll
+    End If
+    
+    ' Limpar arquivo temporário
+    Kill tempScript
+    
+    ExecutePython = result
+End Function
+
+' Função para análise de dados
+Public Function AnalyzeExcelData(dataRange As Range) As String
+    Dim pythonScript As String
+    Dim dataArray As Variant
+    Dim tempFile As String
+    Dim result As String
+    
+    dataArray = dataRange.Value
+    tempFile = Environ("TEMP") & "\excel_data_analyze.csv"
+    
+    ' Escrever dados para arquivo temporário
+    Dim fso As Object
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    Dim file As Object
+    Set file = fso.CreateTextFile(tempFile, True)
+    
+    Dim i As Long, j As Long
+    For i = 1 To UBound(dataArray, 1)
+        Dim line As String
+        line = ""
+        For j = 1 To UBound(dataArray, 2)
+            If j > 1 Then line = line & ","
+            line = line & CStr(dataArray(i, j))
+        Next j
+        file.WriteLine line
+    Next i
+    file.Close
+    
+    ' Script Python para análise
+    pythonScript = "import pandas as pd; import numpy as np; " & _
+                  "df = pd.read_csv('" & Replace(tempFile, "\", "/") & "'); " & _
+                  "print('Formato dos dados:', df.shape); " & _
+                  "print('Colunas:', list(df.columns)); " & _
+                  "numeric_cols = df.select_dtypes(include=[np.number]).columns; " & _
+                  "if len(numeric_cols) > 0: print('Estatísticas:', df[numeric_cols].describe().to_string())"
+    
+    result = ExecutePython(pythonScript)
+    
+    ' Limpar arquivo temporário
+    Kill tempFile
+    
+    AnalyzeExcelData = result
+End Function
+
+' Função para criar interface personalizada
+Public Sub CreatePythonRibbon()
+    ' Esta função pode ser expandida para criar uma interface ribbon personalizada
+    MsgBox "Add-in Python carregado com sucesso!" & vbCrLf & _
+           "Funções disponíveis:" & vbCrLf & _
+           "- ProcessExcelData(range, [caminho])" & vbCrLf & _
+           "- AnalyzeExcelData(range)", vbInformation, "Python Add-in"
+End Sub
